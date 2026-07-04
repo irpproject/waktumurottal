@@ -131,7 +131,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-		    display: flex; flex-direction: column; padding: 20px; text-align: left;
+            display: flex; flex-direction: column; padding: 20px; text-align: left;
             box-shadow: -5px 0 15px rgba(0,0,0,0.2);
         }
         .sidebar-close { align-self: flex-end; background: transparent; border: none; color: white; cursor: pointer; margin-bottom: 30px; }
@@ -496,9 +496,9 @@
 
                 <label style="font-weight: 600; font-size:0.95rem;">3. Waktu Jeda Mundur (Sebelum Waktu Tiba):</label>
                 <div style="display: flex; gap: 10px; margin: 10px 0 20px 0;">
-                    <input type="number" id="rule-hour" class="input-loc" value="0" min="0" max="23" placeholder="Jam">
-                    <input type="number" id="rule-min" class="input-loc" value="10" min="0" max="59" placeholder="Menit">
-                    <input type="number" id="rule-sec" class="input-loc" value="0" min="0" max="59" placeholder="Detik">
+                    <input type="number" id="rule-hour" class="input-loc" value="0" min="0" max="5" placeholder="Jam" oninput="if(this.value > 5) this.value = 5;">
+                    <input type="number" id="rule-min" class="input-loc" value="10" min="0" max="59" placeholder="Menit" oninput="if(this.value > 59) this.value = 59;">
+                    <input type="number" id="rule-sec" class="input-loc" value="0" min="0" max="59" placeholder="Detik" oninput="if(this.value > 59) this.value = 59;">
                 </div>
 
                 <label style="font-weight: 600; font-size:0.95rem;">4. Impor File MP3 (Dari HP):</label>
@@ -511,8 +511,13 @@
                 <button class="action-btn btn-green" onclick="addMurottalRule()" style="margin-top: 20px;">
                     <i data-lucide="save"></i> Simpan Daftar Putar
                 </button>
-
-                <h4 style="margin-top: 35px; font-size:1.1rem; color:var(--nu-dark);">Daftar Putar Tersimpan:</h4>
+				<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 35px; margin-bottom: 10px;">
+				    <h4 style="font-size:1.1rem; color:var(--nu-dark); margin: 0;">Daftar Putar Tersimpan:</h4>
+				    <select id="sort-rule-select" onchange="renderRulesTable()" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: 'Poppins', sans-serif; font-size: 0.85rem; color: var(--nu-dark); outline: none; cursor: pointer; background: white;">
+				        <option value="terbaru">Terbaru</option>
+				        <option value="paling_atas">Paling Atas</option>
+				    </select>
+				</div>
                 <div class="table-responsive">
                     <table>
                         <thead>
@@ -850,7 +855,7 @@
         let serializedRules = {};
         for(let k in murottalRules){
             serializedRules[k] = {
-                fileName: murottalRules[k].fileName, durationText: murottalRules[k].durationText, offsetSec: murottalRules[k].offsetSec
+            fileName: murottalRules[k].fileName, durationText: murottalRules[k].durationText, offsetSec: murottalRules[k].offsetSec, timestamp: murottalRules[k].timestamp || Date.now()
             };
         }
         usersDB[currentUser].data = {
@@ -874,7 +879,7 @@
                 let rule = data.rules[k];
                 let dbKey = `${currentUser}_${k}`;
                 let fileObj = await getAudioFromDB(dbKey);
-                murottalRules[k] = { fileName: rule.fileName, durationText: rule.durationText, offsetSec: rule.offsetSec, fileObject: fileObj };
+				murottalRules[k] = { fileName: rule.fileName, durationText: rule.durationText, offsetSec: rule.offsetSec, timestamp: rule.timestamp || 0, fileObject: fileObj };
             }
         }
         renderRulesTable();
@@ -1045,7 +1050,7 @@
                     let key = `${d.value}_${p.value}`;
                     let dbKey = `${currentUser}_${key}`;
                     await saveAudioToDB(dbKey, file);
-                    murottalRules[key] = { fileName: file.name, durationText: durationText, offsetSec: totalOffsetSec, fileObject: file };
+					murottalRules[key] = { fileName: file.name, durationText: durationText, offsetSec: totalOffsetSec, fileObject: file, timestamp: Date.now() };
                 }
             }
             document.querySelectorAll('.day-cb, .prayer-cb').forEach(cb => cb.checked = false);
@@ -1054,12 +1059,16 @@
         };
     }
     
-    async function deleteRule(key) {
-        await deleteAudioFromDB(`${currentUser}_${key}`);
-        delete murottalRules[key];
-        if(currentPlayingKey === key) { audioPlayer.pause(); currentPlayingKey = null; }
+    async function deleteRule(keysString) {
+        let keysArr = keysString.split(',');
+        for (let key of keysArr) {
+            await deleteAudioFromDB(`${currentUser}_${key}`);
+            delete murottalRules[key];
+            if(currentPlayingKey === key) { audioPlayer.pause(); currentPlayingKey = null; }
+        }
         saveAccountData(); renderRulesTable();
     }
+    
 
     function renderRulesTable() {
         const tbody = document.getElementById('rules-table-body');
@@ -1068,22 +1077,92 @@
         
         if(keys.length === 0) return tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-gray);">Belum ada data musik terdaftar.</td></tr>`;
         
+        // 1. KELOMPOKKAN DATA YANG SAMA
+        let groups = {};
         keys.forEach(key => {
-            let [dIdx, pName] = key.split('_');
             let rule = murottalRules[key];
-            let h = Math.floor(rule.offsetSec / 3600); let m = Math.floor((rule.offsetSec % 3600) / 60); let s = rule.offsetSec % 60;
+            let [dIdx, pName] = key.split('_');
+            // Sidik jari (Signature): Gabungan nama file & jam mundur agar yang sama otomatis bergabung
+            let signature = `${rule.fileName}_${rule.offsetSec}`;
+            
+            if(!groups[signature]) {
+                groups[signature] = {
+                    fileName: rule.fileName, offsetSec: rule.offsetSec, durationText: rule.durationText,
+                    fileObject: rule.fileObject, keys: [], days: new Set(), prayers: new Set(),
+                    timestamp: rule.timestamp || 0
+                };
+            }
+            groups[signature].keys.push(key);
+            groups[signature].days.add(Number(dIdx));
+            groups[signature].prayers.add(pName);
+            if((rule.timestamp || 0) > groups[signature].timestamp) groups[signature].timestamp = rule.timestamp || 0;
+        });
+    
+        let groupedArray = Object.values(groups);
+    
+        // 2. MENGURUTKAN DATA (SORTING)
+        let sortType = document.getElementById('sort-rule-select') ? document.getElementById('sort-rule-select').value : 'terbaru';
+        
+        if (sortType === 'terbaru') {
+            groupedArray.sort((a, b) => b.timestamp - a.timestamp);
+        } else if (sortType === 'paling_atas') {
+            const prayerOrder = { 'Subuh':1, 'Syuruq':2, 'Dhuha':3, 'Dzuhur':4, 'Ashar':5, 'Maghrib':6, 'Isya':7 };
+            groupedArray.sort((a, b) => {
+                // Hari terkecil (Senin = 1, Minggu = 7)
+                let minDayA = Math.min(...Array.from(a.days).map(d => d === 0 ? 7 : d));
+                let minDayB = Math.min(...Array.from(b.days).map(d => d === 0 ? 7 : d));
+                if (minDayA !== minDayB) return minDayA - minDayB;
+                // Jika hari sama, urutkan dari waktu sholat paling awal
+                let minPrayA = Math.min(...Array.from(a.prayers).map(p => prayerOrder[p]));
+                let minPrayB = Math.min(...Array.from(b.prayers).map(p => prayerOrder[p]));
+                return minPrayA - minPrayB;
+            });
+        }
+    
+        // --- FUNGSI BANTUAN FORMAT TEKS (Otomatis deteksi "Senin - Sabtu") ---
+        function formatDays(daysSet) {
+            let days = Array.from(daysSet).map(d => d === 0 ? 7 : d).sort((a,b) => a - b);
+            if(days.length === 7) return "Setiap Hari";
+            let names = ["", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+            let result = []; let i = 0;
+            while(i < days.length) {
+                let start = i;
+                while(i + 1 < days.length && days[i+1] === days[i] + 1) i++;
+                if (start === i) result.push(names[days[start]]);
+                else if (i - start === 1) result.push(names[days[start]] + ", " + names[days[i]]);
+                else result.push(names[days[start]] + " - " + names[days[i]]);
+                i++;
+            }
+            return result.join(', ');
+        }
+    
+        function formatPrayers(prayersSet) {
+            const order = { 'Subuh':1, 'Syuruq':2, 'Dhuha':3, 'Dzuhur':4, 'Ashar':5, 'Maghrib':6, 'Isya':7 };
+            let p = Array.from(prayersSet).sort((a,b) => order[a] - order[b]);
+            if (p.length === 7) return "Semua Waktu";
+            return p.join(', ');
+        }
+    
+        // 3. CETAK KE TABEL UI
+        groupedArray.forEach(group => {
+            let h = Math.floor(group.offsetSec / 3600); 
+            let m = Math.floor((group.offsetSec % 3600) / 60); 
+            let s = group.offsetSec % 60;
             let offsetText = `${h}j ${m}m ${s}d`;
             
-            let status = rule.fileObject ? `<span style="color:var(--nu-green);">✔️ ${rule.fileName}</span>` : `<span style="color:#f87171;">⚠️ Hilang, hapus & buat lagi</span>`;
+            let status = group.fileObject ? `<span style="color:var(--nu-green);">✔️ ${group.fileName}</span>` : `<span style="color:#f87171;">⚠️ File Hilang</span>`;
             
+            // Gabungkan key jadi koma (dikirim sekaligus saat dihapus)
+            let keysString = group.keys.join(',');
+    
             tbody.innerHTML += `
             <tr>
-                <td><b>${dayNames[dIdx]}</b></td>
-                <td>${pName}</td>
+                <td style="line-height:1.4;"><b>${formatDays(group.days)}</b></td>
+                <td style="line-height:1.4;">${formatPrayers(group.prayers)}</td>
                 <td>${offsetText}</td>
-                <td><b style="color:#007bff;">${rule.durationText}</b></td>
+                <td><b style="color:#007bff;">${group.durationText}</b></td>
                 <td>
-                    <button class="btn-icon-only" style="background:#f87171; width:35px; height:35px;" onclick="showDynamicModal('hapus_data', '${key}')" title="Hapus">
+                    <button class="btn-icon-only" style="background:#f87171; width:35px; height:35px;" onclick="showDynamicModal('hapus_data', '${keysString}')" title="Hapus">
                     <i data-lucide="trash-2" style="width:16px;"></i>
                     </button>
                     <div style="font-size:0.75rem; margin-top:5px;">${status}</div>
@@ -1092,6 +1171,7 @@
         });
         lucide.createIcons();
     }
+    
     
     function formatDuration(seconds) {
         let m = Math.floor(seconds / 60); let s = Math.floor(seconds % 60);
