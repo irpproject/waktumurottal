@@ -911,90 +911,90 @@
     }
 
    function dashboardClockTick() {
-   let timeNow = getCurrentAdjustedTime();
-   if(!isUserChangingScroll) updateScrollSelectorsUI(timeNow);
-   
-   let hh = timeNow.getHours().toString().padStart(2, '0');
-   let mm = timeNow.getMinutes().toString().padStart(2, '0');
-   let ss = timeNow.getSeconds().toString().padStart(2, '0');
-   document.getElementById('time-display').innerText = `${hh}:${mm}:${ss}`;
-   
-   // --- 1. RENDER TANGGAL MASEHI (Ditambah Koreksi Mandiri) ---
-   let masehiDateTarget = new Date(timeNow.getTime());
-   masehiDateTarget.setDate(masehiDateTarget.getDate() + masehiOffsetDays); // Terapkan koreksi masehi
-   
-   const daysId = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-   const monthsId = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-   
-   let dayName = daysId[masehiDateTarget.getDay()];
-   let dateNum = masehiDateTarget.getDate();
-   let monthName = monthsId[masehiDateTarget.getMonth()];
-   let yearNum = masehiDateTarget.getFullYear();
-   document.getElementById('date-display').innerText = `${dayName}, ${dateNum} ${monthName} ${yearNum}`;
-   
-   // --- 2. RENDER TANGGAL HIJRIAH (Fix Bug "Januari" & "SM") ---
-   let hijriDateTarget = new Date(timeNow.getTime());
-   
-   // Otomatis geser +1 hari jika waktu saat ini sudah melewati waktu Maghrib
-   if (prayerTimesData['Maghrib']) {
-   let [mH, mM] = prayerTimesData['Maghrib'].split(':').map(Number);
-   let maghribTime = new Date(timeNow);
-   maghribTime.setHours(mH, mM + (prayerCorrections['Maghrib'] || 0), 0, 0);
-   
-   if (timeNow.getTime() >= maghribTime.getTime()) {
-   hijriDateTarget.setDate(hijriDateTarget.getDate() + 1);
-   }
-   }
-   
-   // Terapkan koreksi hari Hijriah dari panel pengaturan
-   hijriDateTarget.setDate(hijriDateTarget.getDate() + hijriOffsetDays);
-   
-   let hijriStr = "Menghitung Hijriah...";
-   try {
-   // Paksa mengambil format angka murni (Month/Day/Year) dari kalender islamic
-   let formatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' });
-   let parts = formatter.formatToParts(hijriDateTarget);
-   
-   let hDay = parts.find(p => p.type === 'day').value;
-   let hMonthNum = parseInt(parts.find(p => p.type === 'month').value);
-   let hYear = parts.find(p => p.type === 'year').value;
-   
-   // Array Nama Bulan Hijriah Resmi Bahasa Indonesia
-   const hijriMonthsId = [
-   "Muharram", "Safar", "Rabiul Awal", "Rabiul Akhir", 
-   "Jumadil Awal", "Jumadil Akhir", "Rajab", "Sya'ban", 
-   "Ramadhan", "Syawal", "Dzulqa'dah", "Dzulhijjah"
-   ];
-   
-   // Ambil nama bulan berdasarkan indeks angka (1 - 12)
-   let hMonthName = hijriMonthsId[hMonthNum - 1] || "Muharram";
-   
-   // Jika browser error berat & mendeteksi tahun masehi (>1900), gunakan hitungan manual cadangan
-   if (parseInt(hYear) > 1900) {
-   let julian = Math.floor(hijriDateTarget.getTime() / 86400000) + 2440588;
-   let l = julian - 1948440 + 10632;
-   let n = Math.floor((l - 1) / 10631);
-   l = l - n * 10631 + 1;
-   let calcYear = Math.floor((30 * l + 11) / 10631) + 30 * n + 1;
-   let calcMonth = Math.floor((11 * (l - Math.floor((10631 * (calcYear - 30 * n) + 14) / 30)) + 330) / 325);
-   let calcDay = l - Math.floor((10631 * (calcYear - 30 * n) + 14) / 30) - Math.floor((325 * calcMonth - 320) / 11) + 1;
-   
-   hijriStr = `${calcDay} ${hijriMonthsId[calcMonth - 1]} ${calcYear} H`;
-   } else {
-   // Output normal yang rapi dan bersih
-   hijriStr = `${hDay} ${hMonthName} ${hYear} H`;
-   }
-   } catch (e) {
-   hijriStr = "Menghitung Hijriah...";
-   }
-   
-   document.getElementById('hijri-display').innerText = hijriStr;
-   
-   // ---------------------------------------------
-   evaluateMurottalTrigger(timeNow);
-   updateDynamicStatus(timeNow);
-   checkPrayerNotification(timeNow);
-   }
+    let timeNow = getCurrentAdjustedTime();
+
+    // --- KUNCI PERBAIKAN ---
+    // Terapkan koreksi Masehi langsung ke sistem waktu utama di awal.
+    // Ini membuat hari (Senin-Minggu) bergeser, dan sistem MP3 akan merespons hari yang baru.
+    timeNow.setDate(timeNow.getDate() + masehiOffsetDays);
+    
+    if(!isUserChangingScroll) updateScrollSelectorsUI(timeNow);
+    
+    let hh = timeNow.getHours().toString().padStart(2, '0');
+    let mm = timeNow.getMinutes().toString().padStart(2, '0');
+    let ss = timeNow.getSeconds().toString().padStart(2, '0');
+    document.getElementById('time-display').innerText = `${hh}:${mm}:${ss}`;
+    
+    // --- 1. RENDER TANGGAL MASEHI ---
+    // Sekarang cukup gunakan timeNow langsung, karena sudah dikoreksi di atas
+    const daysId = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    const monthsId = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    
+    let dayName = daysId[timeNow.getDay()];
+    let dateNum = timeNow.getDate();
+    let monthName = monthsId[timeNow.getMonth()];
+    let yearNum = timeNow.getFullYear();
+    document.getElementById('date-display').innerText = `${dayName}, ${dateNum} ${monthName} ${yearNum}`;
+
+    // --- 2. RENDER TANGGAL HIJRIAH ---
+    let hijriDateTarget = new Date(timeNow.getTime());
+    
+    if (prayerTimesData['Maghrib']) {
+        let [mH, mM] = prayerTimesData['Maghrib'].split(':').map(Number);
+        let maghribTime = new Date(timeNow);
+        maghribTime.setHours(mH, mM + (prayerCorrections['Maghrib'] || 0), 0, 0);
+        
+        if (timeNow.getTime() >= maghribTime.getTime()) {
+            hijriDateTarget.setDate(hijriDateTarget.getDate() + 1);
+        }
+    }
+
+    hijriDateTarget.setDate(hijriDateTarget.getDate() + hijriOffsetDays);
+    
+    let hijriStr = "Menghitung Hijriah...";
+    try {
+        let formatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' });
+        let parts = formatter.formatToParts(hijriDateTarget);
+        
+        let hDay = parts.find(p => p.type === 'day').value;
+        let hMonthNum = parseInt(parts.find(p => p.type === 'month').value);
+        let hYear = parts.find(p => p.type === 'year').value;
+        
+        const hijriMonthsId = [
+            "Muharram", "Safar", "Rabiul Awal", "Rabiul Akhir", 
+            "Jumadil Awal", "Jumadil Akhir", "Rajab", "Sya'ban", 
+            "Ramadhan", "Syawal", "Dzulqa'dah", "Dzulhijjah"
+        ];
+        
+        let hMonthName = hijriMonthsId[hMonthNum - 1] || "Muharram";
+
+        if (parseInt(hYear) > 1900) {
+            let julian = Math.floor(hijriDateTarget.getTime() / 86400000) + 2440588;
+            let l = julian - 1948440 + 10632;
+            let n = Math.floor((l - 1) / 10631);
+            l = l - n * 10631 + 1;
+            let calcYear = Math.floor((30 * l + 11) / 10631) + 30 * n + 1;
+            let calcMonth = Math.floor((11 * (l - Math.floor((10631 * (calcYear - 30 * n) + 14) / 30)) + 330) / 325);
+            let calcDay = l - Math.floor((10631 * (calcYear - 30 * n) + 14) / 30) - Math.floor((325 * calcMonth - 320) / 11) + 1;
+            
+            hijriStr = `${calcDay} ${hijriMonthsId[calcMonth - 1]} ${calcYear} H`;
+        } else {
+            hijriStr = `${hDay} ${hMonthName} ${hYear} H`;
+        }
+    } catch (e) {
+        hijriStr = "Menghitung Hijriah...";
+    }
+
+    document.getElementById('hijri-display').innerText = hijriStr;
+    
+    // ---------------------------------------------
+    // Karena timeNow digeser, fungsi-fungsi ini sekarang 
+    // akan menggunakan hari yang sudah dikoreksi Masehi!
+    evaluateMurottalTrigger(timeNow);
+    updateDynamicStatus(timeNow);
+    checkPrayerNotification(timeNow);
+}
+
     function populateScrollSelectors() {
         const sh = document.getElementById('scroll-hour'); const sm = document.getElementById('scroll-minute'); const ss = document.getElementById('scroll-second');
         for(let i=0; i<24; i++) sh.innerHTML += `<option value="${i}">${i.toString().padStart(2,'0')}</option>`;
