@@ -355,8 +355,9 @@
         <div class="sidebar" id="sidebar">
             <button class="sidebar-close" onclick="toggleSidebar(false)"><i data-lucide="x"></i></button>
             <div class="sidebar-menu">
-                <a class="sidebar-item" onclick="toggleSidebar(false)"><i data-lucide="home"></i> Beranda</a>
-                <a class="sidebar-item"><i data-lucide="user"></i> Profil</a>
+                <a class="sidebar-item" onclick="closeProfile(); toggleSidebar(false)"><i data-lucide="home"></i> Beranda</a>
+                <a class="sidebar-item" onclick="showProfile()"><i data-lucide="user"></i> Profil</a>
+                <a class="sidebar-item" onclick="toggleDefaultMode()"><i data-lucide="play-circle"></i> Mode Default</a>
             </div>
             <div class="sidebar-bottom">
             <a class="sidebar-item" onclick="showDynamicModal('ganti_akun')"><i data-lucide="log-out"></i> Ganti Akun</a>
@@ -376,13 +377,32 @@
         </div>
         </div>
 
-        <div class="welcome-section">
-            <img src="https://iili.io/CYin1Sf.png" alt="Logo">
-            <h2>Selamat Datang di<br><b>Waktu Murottal</b></h2>
-        </div>
-
-        <div class="container">
+        <div id="profile-container" style="display: none; padding: 30px 20px; max-width: 400px; margin: 0 auto; text-align: center; animation: fadeInUp 0.5s ease;">
+            <img src="https://iili.io/CYin1Sf.png" alt="Logo" style="width:100px; height:100px; border-radius:50%; margin-bottom:20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; padding: 5px;">
+            <h3 style="margin-bottom:30px; font-size: 1.5rem; color: var(--nu-dark);">Profil Akun</h3>
             
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="prof-user" readonly style="background:#e2e8f0; font-weight:600; color:var(--text-dark); cursor:not-allowed;">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="prof-pass" readonly style="background:#e2e8f0; font-weight:600; color:var(--text-dark);">
+                <button class="toggle-pwd" onclick="confirmShowPassword()"><i id="prof-eye-icon" data-lucide="eye"></i></button>
+            </div>
+            
+            <button class="action-btn btn-green" onclick="closeProfile()" style="margin-top: 20px;">
+                <i data-lucide="arrow-left"></i> Kembali ke Beranda
+            </button>
+        </div>
+        
+        <div id="main-dashboard-content">
+            <div class="welcome-section">
+                <img src="https://iili.io/CYin1Sf.png" alt="Logo">
+                <h2>Selamat Datang di<br><b>Waktu Murottal</b></h2>
+            </div>
+        
+            <div class="container">
             <div class="card">
                 <h3 class="card-title"><i data-lucide="clock"></i> Jam Aplikasi</h3>
                 <div id="time-display">00:00:00</div>
@@ -484,11 +504,12 @@
                 </div>
             </div>
 
-            <div class="card">
-                <h3 class="card-title"><i data-lucide="music"></i> Pengaturan Auto-Murottal</h3>
-                
-                <label style="font-weight: 600; font-size:0.95rem;">1. Pilih Hari Pemutaran:</label>
-                <div class="checkbox-group" style="margin-top: 10px;">
+                 <div class="card">
+                 <h3 class="card-title"><i data-lucide="music"></i> Pengaturan Auto-Murottal</h3>
+                 
+                 <div id="murottal-form-section">
+                 <label style="font-weight: 600; font-size:0.95rem;">1. Pilih Hari Pemutaran:</label>
+                 <div class="checkbox-group" style="margin-top: 10px;">
                     <label class="checkbox-label"><input type="checkbox" class="day-cb" value="1"> Senin</label>
                     <label class="checkbox-label"><input type="checkbox" class="day-cb" value="2"> Selasa</label>
                     <label class="checkbox-label"><input type="checkbox" class="day-cb" value="3"> Rabu</label>
@@ -526,6 +547,9 @@
                 <button class="action-btn btn-green" onclick="addMurottalRule()" style="margin-top: 20px;">
                     <i data-lucide="save"></i> Simpan Daftar Putar
                 </button>
+                </div> <button id="btn-exit-default" class="action-btn" style="background:#f87171; color:white; display:none; margin-top:15px;" onclick="toggleDefaultMode()">
+                    <i data-lucide="log-out"></i> Keluar Mode Default
+                </button>
 				<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 35px; margin-bottom: 10px;">
 				    <h4 style="font-size:1.1rem; color:var(--nu-dark); margin: 0;">Daftar Putar Tersimpan:</h4>
 				    <select id="sort-rule-select" onchange="renderRulesTable()" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: 'Poppins', sans-serif; font-size: 0.85rem; color: var(--nu-dark); outline: none; cursor: pointer; background: white;">
@@ -551,7 +575,7 @@
 
         </div>
     </div>
-
+                 </div>
     <script>
     // Inisialisasi ikon
     lucide.createIcons();
@@ -719,6 +743,9 @@
      let murottalRules = {};
      let hijriOffsetDays = 0; 
      let masehiOffsetDays = 0;
+     let savedLocation = null; // Menyimpan histori lokasi
+     let isDefaultMode = false; // Status mode default
+     let backupRules = {}; // Penyimpan data murottal asli
     let isAudioEngineReady = false;
     let currentPlayingKey = null;
     let isUserChangingScroll = false;
@@ -794,8 +821,15 @@
    msgEl.innerText = 'Apakah Anda yakin ingin menghapus jadwal murottal ini dari daftar putar?';
    btnConfirm.innerText = 'Hapus Data';
    btnConfirm.style.background = '#f87171';
+  
+   } else if (actionType === 'lihat_password') {
+       iconEl.setAttribute('data-lucide', 'eye');
+       iconEl.style.color = '#3b82f6'; // Biru
+       titleEl.innerText = 'Lihat Password?';
+       msgEl.innerText = 'Pastikan tidak ada orang lain yang melihat layar Anda.';
+       btnConfirm.innerText = 'Ya, Tampilkan';
+       btnConfirm.style.background = '#3b82f6';
    }
-   
    lucide.createIcons(); // Render ulang ikon Lucide
    
    // Munculkan Modal dengan animasi
@@ -814,6 +848,13 @@
    } else if (pendingActionType === 'hapus_data') {
    deleteRule(pendingDataKey);
    closeCustomModal(); // Tutup modal setelah data berhasil dihapus
+   
+   } else if (pendingActionType === 'lihat_password') {
+       document.getElementById('prof-pass').type = 'text';
+       document.getElementById('prof-pass').value = usersDB[currentUser].password;
+       document.getElementById('prof-eye-icon').setAttribute('data-lucide', 'eye-off');
+       lucide.createIcons();
+       closeCustomModal();
    }
    }
     function closeCustomModal() {
@@ -880,7 +921,8 @@
         corrections: prayerCorrections, rules: serializedRules, 
         locationHtml: document.getElementById('location-text').innerHTML,
         hijriOffset: hijriOffsetDays, // <--- Baris ini baru ditambahkan agar tersimpan
-        masehiOffset: masehiOffsetDays
+        masehiOffset: masehiOffsetDays,
+        savedLocation: savedLocation
         };
         localStorage.setItem('nu_users_db', JSON.stringify(usersDB));
     }
@@ -894,6 +936,7 @@
         document.getElementById('hijri-offset-val').innerText = hijriOffsetDays > 0 ? `+${hijriOffsetDays}` : hijriOffsetDays;
         masehiOffsetDays = data.masehiOffset || 0;
         document.getElementById('masehi-offset-val').innerText = masehiOffsetDays > 0 ? `+${masehiOffsetDays}` : masehiOffsetDays;
+		savedLocation = data.savedLocation || null;
         document.getElementById('location-text').innerHTML = data.locationHtml || "Lokasi belum ditentukan";
         
         murottalRules = {};
@@ -1014,8 +1057,19 @@
         saveAccountData(); if(Object.keys(prayerTimesData).length > 0) renderPrayerTimesUI();
     }
     function syncWithHP() {
-        appClockOffsetMs = 0; saveAccountData(); alert("Jam berhasil dikembalikan sesuai dengan waktu perangkat.");
-        if(Object.keys(prayerTimesData).length > 0) renderPrayerTimesUI(); togglePanel('clock-panel');
+        appClockOffsetMs = 0; 
+        masehiOffsetDays = 0; // Reset Masehi
+        hijriOffsetDays = 0;  // Reset Hijriah
+        
+        document.getElementById('masehi-offset-val').innerText = 0;
+        document.getElementById('hijri-offset-val').innerText = 0;
+        
+        saveAccountData(); 
+        alert("Jam dan Tanggal berhasil dikembalikan sesuai dengan waktu perangkat.");
+        
+        togglePanel('clock-panel');
+        dashboardClockTick(); // Update UI Jam Langsung
+        loadPrayerTimesAPI(); // Reload otomatis jadwal sholat
     }
     function getCurrentAdjustedTime() { return new Date(new Date().getTime() + appClockOffsetMs); }
 
@@ -1025,29 +1079,53 @@
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(pos => {
                 let lat = pos.coords.latitude; let lon = pos.coords.longitude;
+                savedLocation = { type: 'gps', lat: lat, lon: lon };
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
                 .then(res => res.json()).then(addrData => {
                     let a = addrData.address;
                     document.getElementById('location-text').innerHTML = `<b>Lokasi GPS:</b><br>${a.city||a.county||a.state||"Tidak diketahui"}`;
-                    saveAccountData();
+                    loadPrayerTimesAPI();
                 });
-                loadPrayerTimesAPI(lat, lon);
             }, () => alert("Gagal mendapat GPS. Izinkan lokasi di browser Anda."));
         }
     }
     function fetchLocationManual() {
         let cityName = document.getElementById('manual-city-input').value.trim();
         if (!cityName) return;
+        savedLocation = { type: 'manual', city: cityName };
         document.getElementById('location-text').innerHTML = `<b>Pencarian Manual:</b><br>${cityName}`;
-        fetch(`https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(cityName)}&country=Indonesia&method=20`)
-        .then(res => res.json()).then(apiRes => { if(apiRes.code === 200) extractApiTimings(apiRes.data.timings); });
+        loadPrayerTimesAPI();
     }
-    function loadPrayerTimesAPI(lat, lon) {
-        let now = new Date(); let dateParam = `${now.getDate()}-${now.getMonth()+1}-${now.getFullYear()}`;
-        fetch(`https://api.aladhan.com/v1/timings/${dateParam}?latitude=${lat}&longitude=${lon}&method=20`)
-        .then(res => res.json()).then(apiRes => { if(apiRes.code === 200) extractApiTimings(apiRes.data.timings); });
-    }
+    function loadPrayerTimesAPI() {
+        if(!savedLocation) return;
+        
+        // Gunakan tanggal yang sudah di-adjust masehi
+        let now = getCurrentAdjustedTime();
+        now.setDate(now.getDate() + masehiOffsetDays);
+        let dateParam = `${now.getDate()}-${now.getMonth()+1}-${now.getFullYear()}`;
+        
+        let url = '';
+        if(savedLocation.type === 'gps') {
+            url = `https://api.aladhan.com/v1/timings/${dateParam}?latitude=${savedLocation.lat}&longitude=${savedLocation.lon}&method=20`;
+        } else {
+            url = `https://api.aladhan.com/v1/timingsByCity/${dateParam}?city=${encodeURIComponent(savedLocation.city)}&country=Indonesia&method=20`;
+        }
     
+        fetch(url).then(res => res.json()).then(apiRes => { 
+            if(apiRes.code === 200) {
+                let timings = apiRes.data.timings;
+                let [sH, sM] = timings.Sunrise.split(':').map(Number);
+                let dDate = new Date(); dDate.setHours(sH, sM + 20, 0, 0);
+                let dhuhaTime = dDate.getHours().toString().padStart(2,'0') + ":" + dDate.getMinutes().toString().padStart(2,'0');
+    
+                prayerTimesData = { 
+                    'Subuh': timings.Fajr, 'Syuruq': timings.Sunrise, 'Dhuha': dhuhaTime,
+                    'Dzuhur': timings.Dhuhr, 'Ashar': timings.Asr, 'Maghrib': timings.Maghrib, 'Isya': timings.Isha 
+                };
+                saveAccountData(); renderPrayerTimesUI();
+            }
+        });
+    }
     function extractApiTimings(timings) {
         // Kalkulasi Dhuha: Sunrise + 20 Menit
         let [sH, sM] = timings.Sunrise.split(':').map(Number);
@@ -1237,17 +1315,29 @@
             return p.join(', ');
         }
     
-        // 3. CETAK KE TABEL UI
-        groupedArray.forEach(group => {
-            let h = Math.floor(group.offsetSec / 3600); 
-            let m = Math.floor((group.offsetSec % 3600) / 60); 
-            let s = group.offsetSec % 60;
-            let offsetText = `${h}j ${m}m ${s}d`;
-            
-            let status = group.fileObject ? `<span style="color:var(--nu-green);">✔️ ${group.fileName}</span>` : `<span style="color:#f87171;">⚠️ File Hilang</span>`;
-            
-            // Gabungkan key jadi koma (dikirim sekaligus saat dihapus)
-            let keysString = group.keys.join(',');
+            // 3. CETAK KE TABEL UI
+    groupedArray.forEach(group => {
+        let h = Math.floor(group.offsetSec / 3600); 
+        let m = Math.floor((group.offsetSec % 3600) / 60); 
+        let s = group.offsetSec % 60;
+        let offsetText = `${h}j ${m}m ${s}d`;
+        
+        // PERBAIKAN 1: Pindahkan keysString ke atas sebelum digunakan oleh btnHapus
+        let keysString = group.keys.join(',');
+
+        // PERBAIKAN 2: Kembalikan deklarasi status dari web lama, lalu timpa jika masuk mode default
+        let status = group.fileObject ? `<span style="color:var(--nu-green);">✔️ ${group.fileName}</span>` : `<span style="color:#f87171;">⚠️ File Hilang</span>`;
+        if(group.fileUrl) {
+            status = `<span style="color:var(--nu-green);">✔️ Audio Online</span>`; 
+        }
+        
+        // Tombol hapus sekarang aman karena keysString sudah dibuat di atasnya
+        let btnHapus = isDefaultMode ? 
+        `<span style="color:var(--text-gray); font-size:0.8rem; font-weight:600;">Default</span>` : 
+        `<button class="btn-icon-only" style="background:#f87171; width:35px; height:35px;" onclick="showDynamicModal('hapus_data', '${keysString}')" title="Hapus">
+            <i data-lucide="trash-2" style="width:16px;"></i>
+        </button>`;
+
     
             tbody.innerHTML += `
             <tr>
@@ -1256,9 +1346,7 @@
                 <td>${offsetText}</td>
                 <td><b style="color:#007bff;">${group.durationText}</b></td>
                 <td>
-                    <button class="btn-icon-only" style="background:#f87171; width:35px; height:35px;" onclick="showDynamicModal('hapus_data', '${keysString}')" title="Hapus">
-                    <i data-lucide="trash-2" style="width:16px;"></i>
-                    </button>
+                    ${btnHapus}
                     <div style="font-size:0.75rem; margin-top:5px;">${status}</div>
                 </td>
             </tr>`;
@@ -1283,9 +1371,8 @@
     let keys = Object.keys(murottalRules);
     if(keys.length === 0) return alert("Simpan minimal 1 daftar putar Murottal terlebih dahulu.");
     let firstRule = murottalRules[keys[0]];
-    if(!firstRule.fileObject) return alert("File MP3 bermasalah. Hapus dan masukkan ulang.");
-    
-    audioPlayer.src = URL.createObjectURL(firstRule.fileObject);
+    if(!firstRule.fileObject && !firstRule.fileUrl) return alert("File MP3 bermasalah. Hapus dan masukkan ulang.");
+    audioPlayer.src = firstRule.fileUrl ? firstRule.fileUrl : URL.createObjectURL(firstRule.fileObject);
     audioPlayer.play().then(() => {
     audioPlayer.pause(); 
     audioPlayer.currentTime = 0;
@@ -1361,9 +1448,9 @@
 
     function executePlayMurottal(key, skipToSeconds) {
         let rule = murottalRules[key];
-        if(!rule.fileObject) return;
+        if(!rule.fileObject && !rule.fileUrl) return; // Support link
         currentPlayingKey = key;
-        audioPlayer.src = URL.createObjectURL(rule.fileObject);
+        audioPlayer.src = rule.fileUrl ? rule.fileUrl : URL.createObjectURL(rule.fileObject);
         audioPlayer.onloadedmetadata = function() {
             if (skipToSeconds < audioPlayer.duration) {
                 audioPlayer.currentTime = skipToSeconds;
@@ -1557,10 +1644,91 @@
     dashboardClockTick(); // Paksa jam memperbarui tulisan tanggalnya secara instan
     }
     function adjustMasehi(val) {
-    masehiOffsetDays += val;
-    document.getElementById('masehi-offset-val').innerText = masehiOffsetDays > 0 ? `+${masehiOffsetDays}` : masehiOffsetDays;
-    saveAccountData();
-    dashboardClockTick(); // Perbarui tampilan jam & tanggal seketika
+        masehiOffsetDays += val;
+        document.getElementById('masehi-offset-val').innerText = masehiOffsetDays > 0 ? `+${masehiOffsetDays}` : masehiOffsetDays;
+        saveAccountData();
+        dashboardClockTick();
+        loadPrayerTimesAPI(); // otomatis mengganti jadwal sholat sesuai hari masehi baru
+    }
+    /* ==============================================================
+       LOGIKA HALAMAN PROFIL & LIHAT PASSWORD
+    ============================================================== */
+    function showProfile() {
+        toggleSidebar(false);
+        document.getElementById('main-dashboard-content').style.display = 'none';
+        document.getElementById('profile-container').style.display = 'block';
+        
+        document.getElementById('prof-user').value = currentUser;
+        document.getElementById('prof-pass').value = "********";
+        document.getElementById('prof-pass').type = "password";
+        document.getElementById('prof-eye-icon').setAttribute('data-lucide', 'eye');
+        lucide.createIcons();
+    }
+    
+    function closeProfile() {
+        document.getElementById('profile-container').style.display = 'none';
+        document.getElementById('main-dashboard-content').style.display = 'block';
+    }
+    
+    function confirmShowPassword() {
+        let input = document.getElementById('prof-pass');
+        if (input.type === 'password') {
+            showDynamicModal('lihat_password');
+        } else {
+            // Sembunyikan kembali secara instan
+            input.type = 'password';
+            input.value = "********";
+            document.getElementById('prof-eye-icon').setAttribute('data-lucide', 'eye');
+            lucide.createIcons();
+        }
+    }
+    
+    /* ==============================================================
+       LOGIKA MODE DEFAULT (AUDIO PRESET)
+    ============================================================== */
+    async function toggleDefaultMode() {
+        toggleSidebar(false);
+        
+        if (!isDefaultMode) {
+            // MASUK MODE DEFAULT
+            if (!navigator.onLine) {
+                alert("Sambungkan internet dulu untuk memuat Mode Default.");
+                return;
+            }
+            
+            isDefaultMode = true;
+            backupRules = JSON.parse(JSON.stringify(murottalRules)); // Simpan data user asli
+            
+            // Masukkan data Murottal dummy dari Dropbox
+            murottalRules = {
+                "0_Subuh": { fileName: "Surah Ar-Rahman", durationText: "04:00", offsetSec: 240, fileUrl: "https://github.com/irpproject/waktumurottal/blob/bb6f26a4e6a3619f035c08108839992455dbb88f/008%20Dhuhur%20Surat%20Al%20Mulk%20Mishary%20Rashid.mp3", timestamp: Date.now() },
+                "0_Dzuhur": { fileName: "Surah Al-Waqiah", durationText: "10:00", offsetSec: 600, fileUrl: "https://dl.dropboxusercontent.com/s/4k1z4z8h8hzzx9z/waqiah.mp3", timestamp: Date.now() },
+                "0_Maghrib": { fileName: "Surah Yasin", durationText: "20:00", offsetSec: 1200, fileUrl: "https://dl.dropboxusercontent.com/s/7q8z8h8hzzx9z9z/yasin.mp3", timestamp: Date.now() }
+            };
+            
+            document.getElementById('murottal-form-section').style.display = 'none';
+            document.getElementById('btn-exit-default').style.display = 'inline-flex';
+            document.getElementById('display-acc-name').innerText = "Default";
+            
+            // Hentikan suara jika sedang menyala agar sinkron
+            if(isAudioEngineReady) toggleAudioEngine();
+            alert("Berhasil masuk ke Mode Default.");
+            
+        } else {
+            // KELUAR MODE DEFAULT
+            isDefaultMode = false;
+            document.getElementById('murottal-form-section').style.display = 'block';
+            document.getElementById('btn-exit-default').style.display = 'none';
+            document.getElementById('display-acc-name').innerText = currentUser;
+            
+            // Kembalikan data dan reload Database Blob lokal
+            await loadAccountData(); 
+            if(isAudioEngineReady) toggleAudioEngine();
+            alert("Keluar dari Mode Default.");
+            return; // Render otomatis dihandle loadAccountData
+        }
+        
+        renderRulesTable();
     }
     </script>
 </body>
