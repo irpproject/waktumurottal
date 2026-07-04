@@ -386,7 +386,10 @@
             <div class="card">
                 <h3 class="card-title"><i data-lucide="clock"></i> Jam Aplikasi</h3>
                 <div id="time-display">00:00:00</div>
-                
+                <div style="text-align: center; margin-top: -5px; margin-bottom: 10px;">
+                <div id="date-display" style="color: var(--text-gray); font-size: 0.95rem; font-weight: 500;">Menghitung tanggal...</div>
+                <div id="hijri-display" style="color: var(--nu-green); font-size: 1.05rem; font-family: 'Poppins', sans-serif; font-weight: 600;">Menghitung hijriah...</div>
+                </div>
                 <button class="action-btn btn-outline" onclick="togglePanel('clock-panel')" style="margin-top: 15px;">
                     <i data-lucide="settings-2"></i> Koreksi Jam
                 </button>
@@ -401,8 +404,20 @@
                     <button class="action-btn btn-green" onclick="syncWithHP()" style="margin-bottom: 10px;">
                         <i data-lucide="smartphone"></i> Sinkronkan Waktu HP
                     </button>
-                    <button class="action-btn btn-outline" style="border-color:#ccc; color:#666;" onclick="togglePanel('clock-panel')">Tutup</button>
-                </div>
+                    <p style="margin: 15px 0 10px 0; font-weight:600; color:var(--nu-dark); border-top: 1px solid #ccc; padding-top: 15px;">Koreksi Tanggal Masehi:</p>
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px;">
+                    <button class="btn-adj" onclick="adjustMasehi(-1)">-1 Hari</button>
+                    <span id="masehi-offset-val" class="corr-value" style="font-size: 1rem; font-weight: bold; color: var(--text-dark);">0</span>
+                    <button class="btn-adj" onclick="adjustMasehi(1)">+1 Hari</button>
+                    </div>
+                    
+                    <p style="margin: 15px 0 10px 0; font-weight:600; color:var(--nu-dark); border-top: 1px solid #ccc; padding-top: 5px;">Koreksi Tanggal Hijriah:</p>
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 15px;">
+                    <button class="btn-adj" onclick="adjustHijri(-1)">-1 Hari</button>
+                    <span id="hijri-offset-val" class="corr-value" style="font-size: 1rem; font-weight: bold; color: var(--nu-green);">0</span>
+                    <button class="btn-adj" onclick="adjustHijri(1)">+1 Hari</button>
+                    </div>
+                    </div>
 
                 <button id="toggle-audio-btn" class="action-btn btn-yellow" onclick="toggleAudioEngine()" style="margin-top: 20px;">
                 <i data-lucide="volume-2"></i> AKTIFKAN SUARA LATAR
@@ -701,7 +716,9 @@
     let appClockOffsetMs = 0; 
     let prayerTimesData = {}; 
     let prayerCorrections = { 'Subuh':0, 'Syuruq':0, 'Dhuha':0, 'Dzuhur':0, 'Ashar':0, 'Maghrib':0, 'Isya':0 };
-    let murottalRules = {}; 
+     let murottalRules = {};
+     let hijriOffsetDays = 0; 
+     let masehiOffsetDays = 0;
     let isAudioEngineReady = false;
     let currentPlayingKey = null;
     let isUserChangingScroll = false;
@@ -859,9 +876,11 @@
             };
         }
         usersDB[currentUser].data = {
-            clockOffset: appClockOffsetMs, prayerTimes: prayerTimesData, 
-            corrections: prayerCorrections, rules: serializedRules, 
-            locationHtml: document.getElementById('location-text').innerHTML
+        clockOffset: appClockOffsetMs, prayerTimes: prayerTimesData, 
+        corrections: prayerCorrections, rules: serializedRules, 
+        locationHtml: document.getElementById('location-text').innerHTML,
+        hijriOffset: hijriOffsetDays, // <--- Baris ini baru ditambahkan agar tersimpan
+        masehiOffset: masehiOffsetDays
         };
         localStorage.setItem('nu_users_db', JSON.stringify(usersDB));
     }
@@ -871,6 +890,10 @@
         appClockOffsetMs = data.clockOffset || 0;
         prayerTimesData = data.prayerTimes || {};
         prayerCorrections = data.corrections || { 'Subuh':0, 'Syuruq':0, 'Dhuha':0, 'Dzuhur':0, 'Ashar':0, 'Maghrib':0, 'Isya':0 };
+        hijriOffsetDays = data.hijriOffset || 0;
+        document.getElementById('hijri-offset-val').innerText = hijriOffsetDays > 0 ? `+${hijriOffsetDays}` : hijriOffsetDays;
+        masehiOffsetDays = data.masehiOffset || 0;
+        document.getElementById('masehi-offset-val').innerText = masehiOffsetDays > 0 ? `+${masehiOffsetDays}` : masehiOffsetDays;
         document.getElementById('location-text').innerHTML = data.locationHtml || "Lokasi belum ditentukan";
         
         murottalRules = {};
@@ -887,20 +910,91 @@
         buildPrayerCorrectionUI();
     }
 
-    // Jam Aplikasi
-    function dashboardClockTick() {
-        let timeNow = getCurrentAdjustedTime();
-        if(!isUserChangingScroll) updateScrollSelectorsUI(timeNow);
-        
-        let hh = timeNow.getHours().toString().padStart(2, '0');
-        let mm = timeNow.getMinutes().toString().padStart(2, '0');
-        let ss = timeNow.getSeconds().toString().padStart(2, '0');
-        document.getElementById('time-display').innerText = `${hh}:${mm}:${ss}`;
-        
-        evaluateMurottalTrigger(timeNow);
-	    updateDynamicStatus(timeNow);
-	    checkPrayerNotification(timeNow);
-    }
+   function dashboardClockTick() {
+   let timeNow = getCurrentAdjustedTime();
+   if(!isUserChangingScroll) updateScrollSelectorsUI(timeNow);
+   
+   let hh = timeNow.getHours().toString().padStart(2, '0');
+   let mm = timeNow.getMinutes().toString().padStart(2, '0');
+   let ss = timeNow.getSeconds().toString().padStart(2, '0');
+   document.getElementById('time-display').innerText = `${hh}:${mm}:${ss}`;
+   
+   // --- 1. RENDER TANGGAL MASEHI (Ditambah Koreksi Mandiri) ---
+   let masehiDateTarget = new Date(timeNow.getTime());
+   masehiDateTarget.setDate(masehiDateTarget.getDate() + masehiOffsetDays); // Terapkan koreksi masehi
+   
+   const daysId = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+   const monthsId = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+   
+   let dayName = daysId[masehiDateTarget.getDay()];
+   let dateNum = masehiDateTarget.getDate();
+   let monthName = monthsId[masehiDateTarget.getMonth()];
+   let yearNum = masehiDateTarget.getFullYear();
+   document.getElementById('date-display').innerText = `${dayName}, ${dateNum} ${monthName} ${yearNum}`;
+   
+   // --- 2. RENDER TANGGAL HIJRIAH (Fix Bug "Januari" & "SM") ---
+   let hijriDateTarget = new Date(timeNow.getTime());
+   
+   // Otomatis geser +1 hari jika waktu saat ini sudah melewati waktu Maghrib
+   if (prayerTimesData['Maghrib']) {
+   let [mH, mM] = prayerTimesData['Maghrib'].split(':').map(Number);
+   let maghribTime = new Date(timeNow);
+   maghribTime.setHours(mH, mM + (prayerCorrections['Maghrib'] || 0), 0, 0);
+   
+   if (timeNow.getTime() >= maghribTime.getTime()) {
+   hijriDateTarget.setDate(hijriDateTarget.getDate() + 1);
+   }
+   }
+   
+   // Terapkan koreksi hari Hijriah dari panel pengaturan
+   hijriDateTarget.setDate(hijriDateTarget.getDate() + hijriOffsetDays);
+   
+   let hijriStr = "Menghitung Hijriah...";
+   try {
+   // Paksa mengambil format angka murni (Month/Day/Year) dari kalender islamic
+   let formatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' });
+   let parts = formatter.formatToParts(hijriDateTarget);
+   
+   let hDay = parts.find(p => p.type === 'day').value;
+   let hMonthNum = parseInt(parts.find(p => p.type === 'month').value);
+   let hYear = parts.find(p => p.type === 'year').value;
+   
+   // Array Nama Bulan Hijriah Resmi Bahasa Indonesia
+   const hijriMonthsId = [
+   "Muharram", "Safar", "Rabiul Awal", "Rabiul Akhir", 
+   "Jumadil Awal", "Jumadil Akhir", "Rajab", "Sya'ban", 
+   "Ramadhan", "Syawal", "Dzulqa'dah", "Dzulhijjah"
+   ];
+   
+   // Ambil nama bulan berdasarkan indeks angka (1 - 12)
+   let hMonthName = hijriMonthsId[hMonthNum - 1] || "Muharram";
+   
+   // Jika browser error berat & mendeteksi tahun masehi (>1900), gunakan hitungan manual cadangan
+   if (parseInt(hYear) > 1900) {
+   let julian = Math.floor(hijriDateTarget.getTime() / 86400000) + 2440588;
+   let l = julian - 1948440 + 10632;
+   let n = Math.floor((l - 1) / 10631);
+   l = l - n * 10631 + 1;
+   let calcYear = Math.floor((30 * l + 11) / 10631) + 30 * n + 1;
+   let calcMonth = Math.floor((11 * (l - Math.floor((10631 * (calcYear - 30 * n) + 14) / 30)) + 330) / 325);
+   let calcDay = l - Math.floor((10631 * (calcYear - 30 * n) + 14) / 30) - Math.floor((325 * calcMonth - 320) / 11) + 1;
+   
+   hijriStr = `${calcDay} ${hijriMonthsId[calcMonth - 1]} ${calcYear} H`;
+   } else {
+   // Output normal yang rapi dan bersih
+   hijriStr = `${hDay} ${hMonthName} ${hYear} H`;
+   }
+   } catch (e) {
+   hijriStr = "Menghitung Hijriah...";
+   }
+   
+   document.getElementById('hijri-display').innerText = hijriStr;
+   
+   // ---------------------------------------------
+   evaluateMurottalTrigger(timeNow);
+   updateDynamicStatus(timeNow);
+   checkPrayerNotification(timeNow);
+   }
     function populateScrollSelectors() {
         const sh = document.getElementById('scroll-hour'); const sm = document.getElementById('scroll-minute'); const ss = document.getElementById('scroll-second');
         for(let i=0; i<24; i++) sh.innerHTML += `<option value="${i}">${i.toString().padStart(2,'0')}</option>`;
@@ -1456,7 +1550,18 @@
     popup.classList.remove('show');
     }, 15000);
     }
-    
+    function adjustHijri(val) {
+    hijriOffsetDays += val; // Tambah atau kurangi hari
+    document.getElementById('hijri-offset-val').innerText = hijriOffsetDays > 0 ? `+${hijriOffsetDays}` : hijriOffsetDays;
+    saveAccountData(); // Simpan ke database pengguna
+    dashboardClockTick(); // Paksa jam memperbarui tulisan tanggalnya secara instan
+    }
+    function adjustMasehi(val) {
+    masehiOffsetDays += val;
+    document.getElementById('masehi-offset-val').innerText = masehiOffsetDays > 0 ? `+${masehiOffsetDays}` : masehiOffsetDays;
+    saveAccountData();
+    dashboardClockTick(); // Perbarui tampilan jam & tanggal seketika
+    }
     </script>
 </body>
 </html>
