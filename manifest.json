@@ -1,0 +1,17 @@
+{
+  "name": "Waktu Murottal Premium",
+  "short_name": "Murottal",
+  "description": "Aplikasi Waktu Sholat dan Auto-Murottal",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#004d26",
+  "theme_color": "#006633",
+  "icons": [
+    {
+      "src": "https://iili.io/CYin1Sf.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
